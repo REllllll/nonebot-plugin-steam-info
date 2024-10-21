@@ -435,7 +435,7 @@ async def update_parent_info_handle(
         if isinstance(seg, Text) and seg.text != "":
             info["name"] = seg.text
 
-    if "avatar" not in info or "name" not in info:
+    if "name" not in info:
         await update_parent_info.finish("文本中应包含图片和文字")
 
     matcher.set_arg("target_id", Message(target.id))
