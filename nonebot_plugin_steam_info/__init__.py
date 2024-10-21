@@ -6,11 +6,12 @@ from pathlib import Path
 from nonebot.log import logger
 from PIL import Image as PILImage
 from nonebot.params import Depends
-from nonebot.params import CommandArg
+from nonebot.params import CommandArg, ArgPlainText
 from nonebot import on_command, require
 from typing import Union, Optional, List, Dict
 from nonebot.adapters import Message, Event, Bot
 from nonebot.plugin import PluginMetadata, inherit_supported_adapters
+from nonebot.matcher import Matcher
 
 require("nonebot_plugin_alconna")
 require("nonebot_plugin_localstore")
@@ -420,6 +421,7 @@ async def check_handle(
 
 @update_parent_info.handle()
 async def update_parent_info_handle(
+    matcher: Matcher,
     bot: Bot,
     event: Event,
     target: Target = Depends(get_target),
@@ -428,15 +430,36 @@ async def update_parent_info_handle(
     msg = await UniMessage.generate(message=arg, event=event, bot=bot)
     info = {}
     for seg in msg:
-        if isinstance(seg, Image):
-            info["avatar"] = PILImage.open(BytesIO(await to_image_data(seg)))
-        elif isinstance(seg, Text) and seg.text != "":
+        # if isinstance(seg, Image):
+        #     info["avatar"] = PILImage.open(BytesIO(await to_image_data(seg)))
+        if isinstance(seg, Text) and seg.text != "":
             info["name"] = seg.text
 
     if "avatar" not in info or "name" not in info:
         await update_parent_info.finish("文本中应包含图片和文字")
 
-    parent_data.update(target.parent_id or target.id, info["avatar"], info["name"])
+    matcher.set_arg("target_id", Message(target.id))
+    matcher.set_arg("name", Message(info["name"]))
+
+    # parent_data.update(target.parent_id or target.id, info["avatar"], info["name"])
+    # await update_parent_info.finish("更新成功")
+
+
+@update_parent_info.got("target_id")
+@update_parent_info.got("name")
+@update_parent_info.got("avatar", prompt="请发送图片")
+async def update_parent_info_got_avatar(
+    target_id: str = ArgPlainText(),
+    name: str = ArgPlainText(),
+    avatar: Message = CommandArg(),
+):
+    try:
+        parent_data.update(
+            target_id, PILImage.open(BytesIO(await to_image_data(avatar))), name
+        )
+    except Exception as e:
+        logger.error(f"更新群信息失败: {e}")
+        await update_parent_info.reject_arg("avatar", "更新失败，请重试")
     await update_parent_info.finish("更新成功")
 
 
